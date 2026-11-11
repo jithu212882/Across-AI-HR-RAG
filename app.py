@@ -10,14 +10,23 @@ if str(BASE_DIR) not in sys.path:
 import gradio as gr
 from backend.main import app as fastapi_app
 
-# Minimal dummy Gradio block mounted at /gradio so HF Space healthcheck passes
-with gr.Blocks(title="Across AI Service") as dummy_ui:
-    gr.Markdown("# Across AI Service\nCustom glassmorphic interface is running at the root URL.")
+# Optional Hugging Face ZeroGPU hook
+try:
+    import spaces
+    @spaces.GPU
+    def _hf_gpu_hook():
+        return "ok"
+except Exception:
+    pass
 
-# Mount Gradio onto a sub-path (/gradio) while keeping our custom HTML UI at root (/)
-app = gr.mount_gradio_app(fastapi_app, dummy_ui, path="/gradio")
+with gr.Blocks(title="Across AI") as demo:
+    gr.Markdown("### Across AI Service Active\nCustom glassmorphic interface is running at the root URL.")
+
+# Mount Gradio onto /gradio while keeping custom HTML UI at root (/)
+app = gr.mount_gradio_app(fastapi_app, demo, path="/gradio")
 
 if __name__ == "__main__":
-    import uvicorn
-    port = int(os.getenv("PORT", 7860))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    # Prevent [Errno 98] port collision on Hugging Face Spaces where runner binds port 7860
+    if not os.environ.get("SPACE_ID"):
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 7860)))

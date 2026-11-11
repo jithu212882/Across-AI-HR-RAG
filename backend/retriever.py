@@ -1,4 +1,6 @@
+import os
 import re
+import json
 import logging
 from typing import List, Dict, Any, Optional
 
@@ -12,6 +14,8 @@ from backend.config import (
     CHROMA_DB_PATH,
     COLLECTION_NAME,
     EMBEDDING_MODEL_NAME,
+    CHUNKS_DATA_PATH,
+    PDF_PATH,
     DENSE_K,
     BM25_K,
     HYBRID_ALPHA,
@@ -23,6 +27,7 @@ class HybridRetriever:
     """
     Hybrid retriever combining dense semantic search (ChromaDB + SentenceTransformers)
     with sparse lexical search (BM25) and exact alphanumeric code boosting.
+    Supports seamless automatic ingestion on cloud/container cold start.
     """
 
     def __init__(
@@ -42,13 +47,64 @@ class HybridRetriever:
             path=self.chroma_path,
             settings=Settings(anonymized_telemetry=False)
         )
-        self.collection = self.client.get_collection(name=self.collection_name)
 
         logger.info(f"Loading embedding model '{self.embedding_model_name}'...")
         self.embedder = SentenceTransformer(self.embedding_model_name)
 
+        # Auto-ingest if collection is missing or empty
+        self._ensure_collection_and_data()
+
         # Build in-memory BM25 index
         self._init_bm25_index()
+
+    def _ensure_collection_and_data(self):
+        """Ensure Chroma collection exists and is populated with policy chunks."""
+        try:
+            self.collection = self.client.get_collection(name=self.collection_name)
+        except Exception:
+            self.collection = self.client.create_collection(name=self.collection_name)
+
+        count = self.collection.count()
+        if count == 0:
+            logger.info(f"ChromaDB collection '{self.collection_name}' is empty. Running auto-ingestion...")
+            # 1. Prefer fast auto-ingestion from committed JSON chunks
+            if CHUNKS_DATA_PATH.exists():
+                logger.info(f"Auto-ingesting pre-processed chunks from {CHUNKS_DATA_PATH}...")
+                with open(CHUNKS_DATA_PATH, "r", encoding="utf-8") as f:
+                    chunks = json.load(f)
+
+                ids = [c["id"] for c in chunks]
+                texts = [c.get("text", "") for c in chunks]
+                metas = [{
+                    "chapter": c.get("chapter", ""),
+                    "policy": c.get("policy", ""),
+                    "section": c.get("section", ""),
+                    "page": c.get("page", 1),
+                    "doc_type": c.get("doc_type", "general"),
+                } for c in chunks]
+
+                batch_size = 64
+                for i in range(0, len(chunks), batch_size):
+                    batch_ids = ids[i:i+batch_size]
+                    batch_texts = texts[i:i+batch_size]
+                    batch_metas = metas[i:i+batch_size]
+                    batch_embs = self.embedder.encode(
+                        batch_texts,
+                        batch_size=batch_size,
+                        normalize_embeddings=True,
+                        show_progress_bar=False,
+                    ).tolist()
+                    self.collection.add(
+                        ids=batch_ids,
+                        documents=batch_texts,
+                        metadatas=batch_metas,
+                        embeddings=batch_embs,
+                    )
+                logger.info(f"Auto-ingestion complete. Indexed {self.collection.count()} chunks into ChromaDB.")
+            elif PDF_PATH.exists():
+                from backend.ingest import run_ingest
+                run_ingest(force_rebuild=False)
+                self.collection = self.client.get_collection(name=self.collection_name)
 
     def _init_bm25_index(self):
         """Fetch all documents and initialize BM25Okapi index."""
