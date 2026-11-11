@@ -9,7 +9,6 @@ if str(BASE_DIR) not in sys.path:
 
 import spaces
 import gradio as gr
-from fastapi import Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from backend.main import app as fastapi_app
@@ -18,48 +17,44 @@ from backend.main import app as fastapi_app
 def gpu_warmup(msg: str = "ready") -> str:
     return f"Across AI ZeroGPU: {msg}"
 
-with gr.Blocks(title="Across AI") as demo:
-    gr.Markdown("### Across AI Service Active")
+# Serve the custom obsidian-violet HTML frontend at /ui
+@fastapi_app.get("/ui", include_in_schema=False)
+async def serve_ui():
+    return FileResponse(BASE_DIR / "frontend" / "index.html")
+
+# Serve any static assets under /static if present
+frontend_dir = BASE_DIR / "frontend"
+if frontend_dir.exists():
+    try:
+        fastapi_app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="frontend_static")
+    except Exception:
+        pass
+
+# Render /ui full-viewport inside Gradio's root page so Gradio never blocks /
+with gr.Blocks(
+    title="Across AI",
+    css="footer {display:none !important;} .gradio-container {padding:0 !important; max-width:100% !important;}"
+) as demo:
+    gr.HTML('<iframe src="/ui" style="width:100vw; height:100vh; border:none; position:fixed; top:0; left:0; z-index:9999;"></iframe>')
     box = gr.Textbox(value="ready", visible=False)
-    btn = gr.Button("Warmup", visible=False)
-    btn.click(fn=gpu_warmup, inputs=box, outputs=box)
     demo.load(fn=gpu_warmup, inputs=box, outputs=box)
 
-def configure_app_instance(target_app):
-    """Mount /api routes, static files, and HTTP middleware intercepting root /."""
-    # Mount all FastAPI /api/* routes
+def _mount_fastapi_routes(target_app):
+    """Mount all FastAPI routes (/api/*, /ui, /static) onto Gradio's internal FastAPI app."""
     for route in fastapi_app.routes:
-        if getattr(route, "path", "").startswith("/api"):
+        if getattr(route, "path", "").startswith(("/api", "/ui", "/static")):
             if route not in target_app.router.routes:
                 target_app.router.routes.insert(0, route)
 
-    # Serve static assets from frontend/ if present
-    frontend_dir = BASE_DIR / "frontend"
-    if frontend_dir.exists():
-        target_app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="frontend_static")
+_mount_fastapi_routes(demo.app)
 
-    # Middleware intercepts exact GET / before Gradio's default UI route
-    @target_app.middleware("http")
-    async def serve_custom_root_ui(request: Request, call_next):
-        if request.method == "GET" and request.url.path in ("/", "/index.html"):
-            return FileResponse(BASE_DIR / "frontend" / "index.html")
-        return await call_next(request)
-
-# Configure the initial demo.app
-configure_app_instance(demo.app)
-
-# Patch Gradio App.create_app so that when demo.launch() creates the runtime app,
-# the HTTP middleware and /api routes are preserved
 _orig_create_app = gr.routes.App.create_app
-
-def _custom_create_app(*args, **kwargs):
+def _patched_create_app(*args, **kwargs):
     runtime_app = _orig_create_app(*args, **kwargs)
-    configure_app_instance(runtime_app)
+    _mount_fastapi_routes(runtime_app)
     return runtime_app
+gr.routes.App.create_app = _patched_create_app
 
-gr.routes.App.create_app = _custom_create_app
-
-# Expose app symbol for ASGI runners
 app = demo.app
 
 if __name__ == "__main__":
