@@ -9,61 +9,59 @@ if str(BASE_DIR) not in sys.path:
 
 import spaces
 import gradio as gr
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from backend.main import app as fastapi_app
 
 @spaces.GPU
 def gpu_warmup(msg: str = "ready") -> str:
     return f"Across AI ZeroGPU: {msg}"
 
-# Serve the custom obsidian-violet HTML frontend at /ui
-@fastapi_app.get("/ui", include_in_schema=False)
-async def serve_ui():
-    root_index = BASE_DIR / "index.html"
-    frontend_index = BASE_DIR / "frontend" / "index.html"
-    if root_index.exists():
-        return FileResponse(root_index)
-    elif frontend_index.exists():
-        return FileResponse(frontend_index)
-    return FileResponse("index.html")
+# Read index.html directly in Python
+html_path = BASE_DIR / "index.html"
+if not html_path.exists():
+    html_path = BASE_DIR / "frontend" / "index.html"
 
-# Serve any static assets under /static if present
-frontend_dir = BASE_DIR / "frontend"
-if frontend_dir.exists():
-    try:
-        fastapi_app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="frontend_static")
-    except Exception:
-        pass
+html_content = html_path.read_text(encoding="utf-8")
 
-# Render /ui full-viewport inside Gradio's root page
+# Script shim to ensure scripts in innerHTML execute in modern browsers
+script_shim = (
+    '<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" '
+    'style="display:none;" onload="'
+    'document.querySelectorAll(\'script\').forEach(function(s){'
+    'if(!s.dataset.executed){'
+    's.dataset.executed=\'true\';'
+    'var ns=document.createElement(\'script\');'
+    'Array.from(s.attributes).forEach(function(a){ns.setAttribute(a.name,a.value);});'
+    'ns.text=s.text;'
+    'document.body.appendChild(ns);'
+    '}'
+    '});">'
+)
+
 with gr.Blocks(title="Across AI") as demo:
-    gr.HTML('<iframe src="/ui" style="width:100vw; height:100vh; border:none; position:fixed; top:0; left:0; z-index:9999;"></iframe>')
+    gr.HTML(html_content + script_shim)
     box = gr.Textbox(value="ready", visible=False)
     btn = gr.Button("Warmup", visible=False)
     btn.click(fn=gpu_warmup, inputs=box, outputs=box)
 
-def _mount_fastapi_routes(target_app):
-    """Mount all FastAPI routes (/api/*, /ui, /static) onto Gradio's internal FastAPI app."""
-    for route in fastapi_app.routes:
-        if getattr(route, "path", "").startswith(("/api", "/ui", "/static")):
-            if route not in target_app.router.routes:
-                target_app.router.routes.insert(0, route)
+# Initialize demo config so App.create_app works cleanly
+custom_css = "footer {display:none !important;} .gradio-container {padding:0 !important; max-width:100% !important; margin:0 !important;}"
+demo.config = demo.get_config_file()
+demo.theme = getattr(demo, "theme", None) or gr.themes.Default()
+demo.css = custom_css
+demo.js = getattr(demo, "js", "") or ""
+demo.head = getattr(demo, "head", "") or ""
+demo.head_paths = getattr(demo, "head_paths", []) or []
+demo.css_paths = getattr(demo, "css_paths", []) or []
+if hasattr(demo, "_set_html_css_theme_variables"):
+    demo._set_html_css_theme_variables()
 
-_mount_fastapi_routes(demo.app)
-
-_orig_create_app = gr.routes.App.create_app
-def _patched_create_app(*args, **kwargs):
-    runtime_app = _orig_create_app(*args, **kwargs)
-    _mount_fastapi_routes(runtime_app)
-    return runtime_app
-gr.routes.App.create_app = _patched_create_app
-
-app = demo.app
+# Attach all /api/* routes from backend.main.app onto Gradio's FastAPI app
+app = gr.routes.App.create_app(demo)
+for route in fastapi_app.routes:
+    if getattr(route, "path", "").startswith("/api"):
+        if route not in app.router.routes:
+            app.router.routes.insert(0, route)
 
 if __name__ == "__main__":
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=int(os.environ.get("PORT", 7860)),
-        css="footer {display:none !important;} .gradio-container {padding:0 !important; max-width:100% !important;}",
-    )
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 7860)))
