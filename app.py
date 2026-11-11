@@ -12,13 +12,17 @@ import gradio as gr
 from backend.main import app as fastapi_app
 
 @spaces.GPU
-def gpu_warmup():
-    return "Across AI Ready"
+def gpu_health_check(text: str = "ready") -> str:
+    return f"Across AI ZeroGPU: {text}"
 
 with gr.Blocks(title="Across AI") as demo:
-    gr.Markdown("### Across AI Service Active")
+    gr.Markdown("### Across AI Service")
+    status_box = gr.Textbox(value="ready", visible=False)
+    check_btn = gr.Button("Check", visible=False)
+    check_btn.click(fn=gpu_health_check, inputs=status_box, outputs=status_box)
+    demo.load(fn=gpu_health_check, inputs=status_box, outputs=status_box)
 
-# Mount Gradio at /gradio while keeping our custom HTML UI at /
+# Mount Gradio at /gradio while keeping custom HTML UI at root (/)
 app = gr.mount_gradio_app(fastapi_app, demo, path="/gradio")
 
 if __name__ == "__main__":
