@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: across-ai-backend
+  - name: across-ai-backend
     runtime: python
     plan: free
     region: oregon
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && python -m backend.ingest
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
@@ -19,7 +19,3 @@ services:
         value: llama-3.3-70b-versatile
       - key: LLM_FALLBACK_MODELS
         value: qwen/qwen3.8-27b,llama-3.1-8b-instant
-      - key: CHROMA_PERSIST_DIR
-        value: ./mgi_chroma_db
-      - key: CHROMA_COLLECTION
-        value: mgi_policy_handbook

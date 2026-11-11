@@ -16,11 +16,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application files
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
-COPY MGI_HR_Policy_Handbook_150pages.pdf .
 COPY .env.example .env
-
-# Pre-index vector database during build
-RUN python -m backend.ingest
 
 EXPOSE 8000
 
@@ -28,3 +24,4 @@ ENV PORT=8000
 ENV HOST=0.0.0.0
 
 CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT}"]
+

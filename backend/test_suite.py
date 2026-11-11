@@ -3,7 +3,7 @@ import json
 from fastapi.testclient import TestClient
 
 from backend.main import app
-from backend.config import COLLECTION_NAME, PDF_PATH, CHROMA_DB_PATH
+from backend.config import PDF_PATH, CHUNKS_DATA_PATH
 from backend.retriever import get_retriever
 from backend.llm_service import is_small_talk, build_system_prompt, get_llm_service
 
@@ -15,11 +15,13 @@ class TestAcrossAIRagSystem(unittest.TestCase):
         cls.llm_service = get_llm_service()
 
     def test_01_paths_and_database(self):
-        """Verify knowledge document exists and ChromaDB is populated with 800+ clean chunks."""
+        """Verify knowledge document exists and pre-indexed chunks dataset is populated with 800+ clean chunks."""
         self.assertTrue(PDF_PATH.exists(), f"Handbook PDF missing at {PDF_PATH}")
-        self.assertTrue(CHROMA_DB_PATH.exists(), f"ChromaDB missing at {CHROMA_DB_PATH}")
-        count = self.retriever.collection.count()
+        self.assertTrue(CHUNKS_DATA_PATH.exists(), f"Chunks dataset missing at {CHUNKS_DATA_PATH}")
+        count = self.retriever.count()
         self.assertGreaterEqual(count, 800, f"Expected >= 800 chunks, found {count}")
+        # Backward compatibility check for collection shim
+        self.assertEqual(self.retriever.collection.count(), count)
 
     def test_02_health_endpoint(self):
         """Verify /api/health reports online status without backend telemetry."""

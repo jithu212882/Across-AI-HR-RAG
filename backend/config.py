@@ -10,8 +10,9 @@ load_dotenv(dotenv_path=ENV_PATH)
 # File Paths
 PDF_PATH = BASE_DIR / "MGI_HR_Policy_Handbook_150pages.pdf"
 FRONTEND_DIR = BASE_DIR / "frontend"
+CHUNKS_DATA_PATH = BASE_DIR / "backend" / "data" / "chunks.json"
 
-# ChromaDB Settings (supports CHROMA_PERSIST_DIR & CHROMA_COLLECTION)
+# Database & Storage Settings (supports pre-indexed JSON or ChromaDB fallback)
 CHROMA_DB_PATH = BASE_DIR / os.getenv("CHROMA_PERSIST_DIR", os.getenv("CHROMA_DB_PATH", "./mgi_chroma_db"))
 COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", os.getenv("COLLECTION_NAME", "mgi_policy_handbook"))
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")

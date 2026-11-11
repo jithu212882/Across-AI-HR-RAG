@@ -1,15 +1,14 @@
-# Ignore heavy backend and Python files from Vercel static build
-backend/
-requirements.txt
-MGI_HR_Policy_Handbook_150pages.pdf
+# Ignore local databases, heavy raw PDFs, and virtual environments
 mgi_chroma_db/
-Dockerfile
-.dockerignore
-render.yaml
-.env
-.env.*
+MGI_HR_Policy_Handbook_150pages.pdf
+*.pdf
 venv/
 .venv/
 __pycache__/
 *.pyc
-*.pdf
+.git/
+.env
+.env.*
+Dockerfile
+.dockerignore
+render.yaml

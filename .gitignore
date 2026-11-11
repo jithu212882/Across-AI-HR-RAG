@@ -23,6 +23,10 @@ mgi_chroma_db/
 *.sqlite3
 *.db
 
+# Documents & Large Binaries
+*.pdf
+MGI_HR_Policy_Handbook_150pages.pdf
+
 # Logs & Temporary files
 *.log
 logs/
