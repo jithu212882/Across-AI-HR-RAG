@@ -20,7 +20,13 @@ def gpu_warmup(msg: str = "ready") -> str:
 # Serve the custom obsidian-violet HTML frontend at /ui
 @fastapi_app.get("/ui", include_in_schema=False)
 async def serve_ui():
-    return FileResponse(BASE_DIR / "frontend" / "index.html")
+    root_index = BASE_DIR / "index.html"
+    frontend_index = BASE_DIR / "frontend" / "index.html"
+    if root_index.exists():
+        return FileResponse(root_index)
+    elif frontend_index.exists():
+        return FileResponse(frontend_index)
+    return FileResponse("index.html")
 
 # Serve any static assets under /static if present
 frontend_dir = BASE_DIR / "frontend"
