@@ -39,12 +39,21 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    """Warm up the lightweight hybrid retriever on startup."""
+    """Ensure vector database collection exists and warm up the hybrid retriever on startup."""
     try:
+        from backend.config import COLLECTION_NAME, PDF_PATH
         retriever = get_retriever()
-        logger.info(f"Retriever warmed up successfully with {retriever.count()} policy chunks.")
+        count = retriever.collection.count()
+
+        if count == 0 and PDF_PATH.exists():
+            logger.info(f"ChromaDB collection '{COLLECTION_NAME}' is empty. Running automatic ingestion...")
+            from backend.ingest import run_ingest
+            run_ingest(force_rebuild=False)
+            retriever._init_bm25_index()
+
+        logger.info(f"HybridRetriever initialized successfully with {retriever.count()} policy chunks.")
     except Exception as e:
-        logger.warning(f"Retriever warmup notice: {e}")
+        logger.warning(f"Startup verification notice: {e}")
 
 # Request Models
 class ChatTurn(BaseModel):

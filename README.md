@@ -1,3 +1,14 @@
+---
+title: Across AI HR Assistant
+emoji: 🏢
+colorFrom: purple
+colorTo: indigo
+sdk: gradio
+sdk_version: 6.31.0
+app_file: app.py
+pinned: false
+---
+
 # Across AI — Enterprise HR Assistant
 
 Across AI is a production-grade, conversational HR assistant built for Meridian Global Industries (MGI). It delivers strict, zero-hallucination answers regarding company policies, leave matrices, band/grade structures, and employee guidelines through a hybrid RAG pipeline and an obsidian-violet glassmorphic web interface.
