@@ -9,23 +9,40 @@ if str(BASE_DIR) not in sys.path:
 
 import spaces
 import gradio as gr
+from fastapi.responses import FileResponse
 from backend.main import app as fastapi_app
 
 @spaces.GPU
-def gpu_health_check(text: str = "ready") -> str:
-    return f"Across AI ZeroGPU: {text}"
+def gpu_warmup(msg: str = "ready") -> str:
+    return f"Across AI ZeroGPU: {msg}"
 
 with gr.Blocks(title="Across AI") as demo:
-    gr.Markdown("### Across AI Service")
-    status_box = gr.Textbox(value="ready", visible=False)
-    check_btn = gr.Button("Check", visible=False)
-    check_btn.click(fn=gpu_health_check, inputs=status_box, outputs=status_box)
-    demo.load(fn=gpu_health_check, inputs=status_box, outputs=status_box)
+    gr.Markdown("### Across AI Service Active")
+    box = gr.Textbox(value="ready", visible=False)
+    btn = gr.Button("Warmup", visible=False)
+    btn.click(fn=gpu_warmup, inputs=box, outputs=box)
+    demo.load(fn=gpu_warmup, inputs=box, outputs=box)
 
-# Mount Gradio at /gradio while keeping custom HTML UI at root (/)
-app = gr.mount_gradio_app(fastapi_app, demo, path="/gradio")
+# Include all /api routes from FastAPI app directly onto Gradio's internal FastAPI server
+demo.app.include_router(fastapi_app.router)
+# Also mount for sub-path fallback
+demo.app.mount("/api", fastapi_app)
+
+# Replace default Gradio root GET route with our custom obsidian-violet HTML UI
+demo.app.router.routes = [
+    r for r in demo.app.router.routes
+    if not (hasattr(r, "path") and r.path == "/" and "GET" in r.methods)
+]
+
+@demo.app.get("/", include_in_schema=False)
+async def serve_custom_frontend():
+    return FileResponse(BASE_DIR / "frontend" / "index.html")
+
+# Expose app symbol for ASGI runners
+app = demo.app
 
 if __name__ == "__main__":
-    if not os.environ.get("SPACE_ID"):
-        import uvicorn
-        uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 7860)))
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=int(os.environ.get("PORT", 7860)),
+    )
