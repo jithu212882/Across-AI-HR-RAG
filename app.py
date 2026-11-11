@@ -30,14 +30,12 @@ if frontend_dir.exists():
     except Exception:
         pass
 
-# Render /ui full-viewport inside Gradio's root page so Gradio never blocks /
-with gr.Blocks(
-    title="Across AI",
-    css="footer {display:none !important;} .gradio-container {padding:0 !important; max-width:100% !important;}"
-) as demo:
+# Render /ui full-viewport inside Gradio's root page
+with gr.Blocks(title="Across AI") as demo:
     gr.HTML('<iframe src="/ui" style="width:100vw; height:100vh; border:none; position:fixed; top:0; left:0; z-index:9999;"></iframe>')
     box = gr.Textbox(value="ready", visible=False)
-    demo.load(fn=gpu_warmup, inputs=box, outputs=box)
+    btn = gr.Button("Warmup", visible=False)
+    btn.click(fn=gpu_warmup, inputs=box, outputs=box)
 
 def _mount_fastapi_routes(target_app):
     """Mount all FastAPI routes (/api/*, /ui, /static) onto Gradio's internal FastAPI app."""
@@ -61,4 +59,5 @@ if __name__ == "__main__":
     demo.launch(
         server_name="0.0.0.0",
         server_port=int(os.environ.get("PORT", 7860)),
+        css="footer {display:none !important;} .gradio-container {padding:0 !important; max-width:100% !important;}",
     )
