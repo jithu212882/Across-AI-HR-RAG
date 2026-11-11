@@ -28,10 +28,41 @@ Across AI is a production-grade, conversational HR assistant built for Meridian 
 │   └── index.html          # Obsidian-violet glassmorphic desktop interface
 ├── .env.example            # Environment configuration template
 ├── .gitignore              # Sensitive files & secret prevention
+├── vercel.json             # Vercel static site routing configuration
+├── .vercelignore           # Excludes heavy Python/ML dependencies from Vercel
+├── pyproject.toml          # Static project descriptor
+├── render.yaml             # Render Blueprint web service definition
+├── Dockerfile              # Containerized production runtime
+├── .dockerignore           # Container build exclusions
 ├── MGI_HR_Policy_Handbook_150pages.pdf  # Source knowledge handbook
 ├── requirements.txt        # Python dependencies
 └── README.md
 ```
+
+---
+
+## Production Deployment (Vercel + Render)
+
+### 1. Backend on Render
+Deploy the API and ChromaDB vector engine to Render:
+1. Connect your GitHub repository (`jithu212882/Across-AI-HR-RAG`) on [Render](https://render.com).
+2. Choose **Web Service** or use the included Blueprint (`render.yaml`).
+3. Set **Build Command:**
+   ```bash
+   pip install --upgrade pip && pip install -r requirements.txt && python -m backend.ingest
+   ```
+4. Set **Start Command:**
+   ```bash
+   uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+   ```
+5. Add your environment variables (`LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`).
+6. Copy your deployed Render service URL (e.g. `https://across-ai-backend.onrender.com`).
+
+### 2. Frontend on Vercel
+Deploy the static glassmorphic UI to Vercel:
+1. Import your GitHub repository (`jithu212882/Across-AI-HR-RAG`) on [Vercel](https://vercel.com).
+2. Vercel automatically uses `vercel.json` and `.vercelignore` to serve `frontend/` as static assets without building heavy Python bundles.
+3. Open your deployed Vercel site, click **Settings**, and paste your Render service URL into the **Render Backend URL** field. Across AI will connect to your cloud API with full streaming support.
 
 ---
 

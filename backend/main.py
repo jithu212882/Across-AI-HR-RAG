@@ -28,7 +28,7 @@ app = FastAPI(
     version="2.0.0",
 )
 
-# Enable CORS for local desktop usage
+# Enable CORS for local and cloud deployment (e.g. Vercel frontend)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,6 +36,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """Ensure vector database collection exists and is populated on cloud startup."""
+    try:
+        from backend.config import CHROMA_DB_PATH, COLLECTION_NAME, PDF_PATH
+        import chromadb
+        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+        try:
+            col = client.get_collection(name=COLLECTION_NAME)
+            count = col.count()
+        except Exception:
+            count = 0
+
+        if count == 0 and PDF_PATH.exists():
+            logger.info(f"ChromaDB collection '{COLLECTION_NAME}' is empty. Running automatic ingestion...")
+            from backend.ingest import run_ingest
+            run_ingest(force_rebuild=False)
+    except Exception as e:
+        logger.warning(f"ChromaDB startup verification notice: {e}")
 
 # Request Models
 class ChatTurn(BaseModel):

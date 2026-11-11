@@ -1,0 +1,11 @@
+[project]
+name = "across-ai"
+version = "2.0.0"
+description = "Across AI - Enterprise HR Assistant"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

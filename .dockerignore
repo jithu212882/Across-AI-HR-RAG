@@ -1,0 +1,17 @@
+# Docker build ignore
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+.git/
+.gitignore
+.env
+.env.*
+mgi_chroma_db/
+vercel.json
+.vercelignore
+pyproject.toml

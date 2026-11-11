@@ -981,6 +981,12 @@
     </div>
 
     <div class="form-group">
+      <label for="inputBackendUrl">Render Backend URL (Cloud Deployment)</label>
+      <input type="text" id="inputBackendUrl" class="form-control" placeholder="https://across-ai-backend.onrender.com" />
+      <span class="form-help">Leave empty for local development (defaults to same origin or http://127.0.0.1:8000).</span>
+    </div>
+
+    <div class="form-group">
       <label for="inputApiKey">API Key (LLM_API_KEY)</label>
       <input type="password" id="inputApiKey" class="form-control" placeholder="Enter API key..." />
       <span class="form-help">Enables real-time generative reasoning for Across AI.</span>
@@ -1066,20 +1072,54 @@
     heroContainer.style.display = 'flex';
   }
 
+  // Dynamic API Base URL resolution:
+  function getApiBase() {
+    const saved = localStorage.getItem('ACROSS_AI_API_BASE');
+    if (saved && saved.trim()) return saved.trim().replace(/\/+$/, '');
+    if (window.ACROSS_AI_BACKEND_URL && window.ACROSS_AI_BACKEND_URL.trim()) {
+      return window.ACROSS_AI_BACKEND_URL.trim().replace(/\/+$/, '');
+    }
+    // If opened via local dev server on non-8000 port (e.g. Vite, LiveServer, Vercel CLI)
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      if (window.location.port !== '8000') {
+        return 'http://127.0.0.1:8000';
+      }
+    }
+    return '';
+  }
+
+  function getApiUrl(path) {
+    const base = getApiBase();
+    if (!base) return path;
+    const cleanPath = path.startsWith('/') ? path : '/' + path;
+    return `${base}${cleanPath}`;
+  }
+
   // Settings Modal Handlers
   btnOpenSettings.addEventListener('click', () => {
+    const inputBackend = document.getElementById('inputBackendUrl');
+    if (inputBackend) {
+      inputBackend.value = localStorage.getItem('ACROSS_AI_API_BASE') || '';
+    }
     settingsModal.classList.add('active');
   });
   btnCloseSettings.addEventListener('click', () => settingsModal.classList.remove('active'));
   btnCancelModal.addEventListener('click', () => settingsModal.classList.remove('active'));
 
   btnSaveConfig.addEventListener('click', async () => {
+    const backendUrl = document.getElementById('inputBackendUrl').value.trim();
+    if (backendUrl) {
+      localStorage.setItem('ACROSS_AI_API_BASE', backendUrl);
+    } else {
+      localStorage.removeItem('ACROSS_AI_API_BASE');
+    }
+
     const apiKey = document.getElementById('inputApiKey').value.trim();
     const baseUrl = document.getElementById('inputBaseUrl').value.trim();
     const model = document.getElementById('selectModel').value;
 
     try {
-      const res = await fetch('/api/config', {
+      const res = await fetch(getApiUrl('/api/config'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1099,7 +1139,7 @@
   // Health Status Check
   async function checkHealth() {
     try {
-      await fetch('/api/health');
+      await fetch(getApiUrl('/api/health'));
     } catch (e) {
       console.warn('Health check failed', e);
     }
@@ -1186,7 +1226,7 @@
     let accumulatedText = '';
 
     try {
-      const response = await fetch('/api/chat/stream', {
+      const response = await fetch(getApiUrl('/api/chat/stream'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1240,7 +1280,7 @@
     } catch (streamErr) {
       console.warn('Streaming failed, fallback to /api/chat:', streamErr);
       try {
-        const res = await fetch('/api/chat', {
+        const res = await fetch(getApiUrl('/api/chat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
