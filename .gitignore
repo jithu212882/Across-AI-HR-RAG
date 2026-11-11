@@ -1,0 +1,37 @@
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+
+# Python virtual environment
+venv/
+env/
+ENV/
+.venv/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Chroma Vector Database & SQLite
+mgi_chroma_db/
+*.sqlite3
+*.db
+
+# Logs & Temporary files
+*.log
+logs/
+temp/
+tmp/
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
