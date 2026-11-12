@@ -4,6 +4,9 @@ import json
 import logging
 from typing import List, Dict, Any, Optional
 
+# Force CPU execution for embedding model on ZeroGPU containers
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+
 import chromadb
 from chromadb.config import Settings
 import numpy as np
@@ -61,8 +64,8 @@ class HybridRetriever:
             except Exception:
                 self.client = chromadb.EphemeralClient(settings=Settings(anonymized_telemetry=False))
 
-        logger.info(f"Loading embedding model '{self.embedding_model_name}'...")
-        self.embedder = SentenceTransformer(self.embedding_model_name)
+        logger.info(f"Loading embedding model '{self.embedding_model_name}' on CPU...")
+        self.embedder = SentenceTransformer(self.embedding_model_name, device="cpu")
 
         # Auto-ingest if collection is missing or empty; fall back if primary path is read-only
         try:

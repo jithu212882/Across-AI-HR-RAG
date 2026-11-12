@@ -6,6 +6,9 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+# Force CPU execution for embedding model on ZeroGPU containers
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+
 import fitz  # PyMuPDF
 import pymupdf4llm
 import chromadb
@@ -359,8 +362,8 @@ def index_chunks(chunks: List[Dict[str, Any]], recreate: bool = True) -> int:
         metadata={"description": "MGI HR Policy Handbook Vector Store"}
     )
 
-    logger.info(f"Loading embedding model: {EMBEDDING_MODEL_NAME}...")
-    embedder = SentenceTransformer(EMBEDDING_MODEL_NAME)
+    logger.info(f"Loading embedding model: {EMBEDDING_MODEL_NAME} on CPU...")
+    embedder = SentenceTransformer(EMBEDDING_MODEL_NAME, device="cpu")
 
     batch_size = 64
     total = len(chunks)
