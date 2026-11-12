@@ -64,8 +64,21 @@ class HybridRetriever:
         logger.info(f"Loading embedding model '{self.embedding_model_name}'...")
         self.embedder = SentenceTransformer(self.embedding_model_name)
 
-        # Auto-ingest if collection is missing or empty
-        self._ensure_collection_and_data()
+        # Auto-ingest if collection is missing or empty; fall back if primary path is read-only
+        try:
+            self._ensure_collection_and_data()
+        except Exception as e:
+            logger.warning(f"Primary ChromaDB collection setup failed ({e}); falling back to /tmp/mgi_chroma_db or EphemeralClient and re-ingesting.")
+            try:
+                self.client = chromadb.PersistentClient(
+                    path="/tmp/mgi_chroma_db",
+                    settings=Settings(anonymized_telemetry=False)
+                )
+                self._ensure_collection_and_data()
+            except Exception as e2:
+                logger.warning(f"/tmp/mgi_chroma_db fallback failed ({e2}); using EphemeralClient.")
+                self.client = chromadb.EphemeralClient(settings=Settings(anonymized_telemetry=False))
+                self._ensure_collection_and_data()
 
         # Build in-memory BM25 index
         self._init_bm25_index()
@@ -115,17 +128,51 @@ class HybridRetriever:
                     )
                 logger.info(f"Auto-ingestion complete. Indexed {self.collection.count()} chunks into ChromaDB.")
             elif PDF_PATH.exists():
-                from backend.ingest import run_ingest
-                run_ingest(force_rebuild=False)
-                self.collection = self.client.get_collection(name=self.collection_name)
+                logger.info(f"Auto-ingesting PDF directly into active ChromaDB collection from {PDF_PATH}...")
+                from backend.ingest import extract_and_chunk_pdf
+                chunks = extract_and_chunk_pdf(PDF_PATH)
+                ids = [c["id"] for c in chunks]
+                texts = [c.get("text", "") for c in chunks]
+                metas = [{
+                    "chapter": c.get("chapter", ""),
+                    "policy": c.get("policy", ""),
+                    "section": c.get("section", ""),
+                    "page": c.get("page", 1),
+                    "doc_type": c.get("doc_type", "general"),
+                } for c in chunks]
+
+                batch_size = 64
+                for i in range(0, len(chunks), batch_size):
+                    batch_ids = ids[i:i+batch_size]
+                    batch_texts = texts[i:i+batch_size]
+                    batch_metas = metas[i:i+batch_size]
+                    batch_embs = self.embedder.encode(
+                        batch_texts,
+                        batch_size=batch_size,
+                        normalize_embeddings=True,
+                        show_progress_bar=False,
+                    ).tolist()
+                    self.collection.add(
+                        ids=batch_ids,
+                        documents=batch_texts,
+                        metadatas=batch_metas,
+                        embeddings=batch_embs,
+                    )
+                logger.info(f"PDF auto-ingestion complete. Indexed {self.collection.count()} chunks into ChromaDB.")
 
     def _init_bm25_index(self):
         """Fetch all documents and initialize BM25Okapi index."""
         logger.info("Building BM25 lexical index from ChromaDB documents...")
         all_data = self.collection.get(include=["documents", "metadatas"])
-        self.corpus_ids = all_data["ids"]
-        self.corpus_docs = all_data["documents"]
-        self.corpus_metas = all_data["metadatas"]
+        self.corpus_ids = all_data.get("ids") or []
+        self.corpus_docs = all_data.get("documents") or []
+        self.corpus_metas = all_data.get("metadatas") or []
+
+        if not self.corpus_docs:
+            logger.warning("BM25 index initialized with 0 documents.")
+            self.tokenized_corpus = []
+            self.bm25 = None
+            return
 
         # Tokenize corpus for BM25
         self.tokenized_corpus = [
@@ -178,7 +225,7 @@ class HybridRetriever:
         3. Exact alphanumeric code boost (e.g. HR-03-02, HR-F07, Band D, USD 50)
         4. Reciprocal / Weighted fusion and top-k ranking
         """
-        if not query.strip():
+        if not query.strip() or not self.corpus_docs or self.bm25 is None:
             return []
 
         exact_codes = self._detect_exact_codes(query)

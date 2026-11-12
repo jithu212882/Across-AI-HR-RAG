@@ -95,10 +95,16 @@ class LLMService:
         reload_env()
         if not config.LLM_API_KEY or not config.LLM_API_KEY.strip():
             return None
-        return OpenAI(
-            base_url=config.LLM_BASE_URL,
-            api_key=config.LLM_API_KEY,
-        )
+        try:
+            base_url = (config.LLM_BASE_URL or "").strip() or "https://api.groq.com/openai/v1"
+            api_key = config.LLM_API_KEY.strip()
+            return OpenAI(
+                base_url=base_url,
+                api_key=api_key,
+            )
+        except Exception as e:
+            logger.exception(f"Failed to create OpenAI client: {e}")
+            return None
 
     def get_active_provider(self) -> Dict[str, Any]:
         """Check status of configuration without leaking internal details."""
@@ -185,6 +191,8 @@ class LLMService:
                     frequency_penalty=FREQUENCY_PENALTY,
                     max_tokens=MAX_TOKENS,
                 )
+                if not getattr(completion, "choices", None):
+                    continue
                 content = completion.choices[0].message.content or ""
                 return content.strip()
             except Exception as e:
@@ -256,7 +264,11 @@ class LLMService:
                 )
                 yielded_any = False
                 for chunk in stream:
-                    token = chunk.choices[0].delta.content or ""
+                    choices = getattr(chunk, "choices", None)
+                    if not choices:
+                        continue
+                    delta = getattr(choices[0], "delta", None)
+                    token = getattr(delta, "content", None) or ""
                     if token:
                         yielded_any = True
                         yield {"type": "token", "token": token}

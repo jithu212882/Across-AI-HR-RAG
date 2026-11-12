@@ -32,15 +32,15 @@ def _resolve_llm_provider(base_url: str, api_key: str) -> str:
         return "groq"
     return "groq"
 
-raw_base_url = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
+raw_base_url = (os.getenv("LLM_BASE_URL") or "").strip() or "https://api.groq.com/openai/v1"
 # Strip markdown links if present in .env
 if "[" in raw_base_url and "](" in raw_base_url:
     raw_base_url = raw_base_url.split("](")[1].rstrip(")")
-LLM_BASE_URL = raw_base_url.strip('"\'')
+LLM_BASE_URL = raw_base_url.strip().strip('"\'').strip() or "https://api.groq.com/openai/v1"
 
-LLM_API_KEY = os.getenv("LLM_API_KEY", "").strip('"\'')
+LLM_API_KEY = (os.getenv("LLM_API_KEY") or "").strip().strip('"\'').strip()
 LLM_PROVIDER = _resolve_llm_provider(LLM_BASE_URL, LLM_API_KEY)
-LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile").strip('"\'')
+LLM_MODEL = (os.getenv("LLM_MODEL") or "").strip().strip('"\'').strip() or "llama-3.3-70b-versatile"
 
 # Fallback Models list
 raw_fallbacks = os.getenv("LLM_FALLBACK_MODELS", "llama-3.1-8b-instant,mixtral-8x7b-32768").strip('"\'')
@@ -69,14 +69,14 @@ def reload_env():
     except Exception:
         pass
 
-    raw_url = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
+    raw_url = (os.getenv("LLM_BASE_URL") or "").strip() or "https://api.groq.com/openai/v1"
     if "[" in raw_url and "](" in raw_url:
         raw_url = raw_url.split("](")[1].rstrip(")")
-    LLM_BASE_URL = raw_url.strip('"\'')
+    LLM_BASE_URL = raw_url.strip().strip('"\'').strip() or "https://api.groq.com/openai/v1"
 
-    LLM_API_KEY = os.getenv("LLM_API_KEY", "").strip('"\'')
+    LLM_API_KEY = (os.getenv("LLM_API_KEY") or "").strip().strip('"\'').strip()
     LLM_PROVIDER = _resolve_llm_provider(LLM_BASE_URL, LLM_API_KEY)
-    LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile").strip('"\'')
+    LLM_MODEL = (os.getenv("LLM_MODEL") or "").strip().strip('"\'').strip() or "llama-3.3-70b-versatile"
 
     raw_fb = os.getenv("LLM_FALLBACK_MODELS", "llama-3.1-8b-instant,mixtral-8x7b-32768").strip('"\'')
     FALLBACK_MODELS = [m.strip() for m in raw_fb.split(",") if m.strip()]

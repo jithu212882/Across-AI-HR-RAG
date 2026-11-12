@@ -82,18 +82,21 @@ async def chat_endpoint(request: ChatRequest):
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
-    llm_service = get_llm_service()
-    history_dicts = [{"role": t.role, "content": t.content} for t in request.history]
+    history_dicts = [{"role": t.role, "content": t.content} for t in (request.history or [])]
 
     try:
+        llm_service = get_llm_service()
         response_data = llm_service.generate_response(
             query=request.message,
             history=history_dicts,
         )
         return response_data
     except Exception as e:
-        logger.error(f"Chat generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Chat generation error")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e), "detail": str(e), "type": type(e).__name__},
+        )
 
 @app.post("/api/chat/stream")
 async def chat_stream_endpoint(request: ChatRequest):
@@ -105,16 +108,16 @@ async def chat_stream_endpoint(request: ChatRequest):
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
-    llm_service = get_llm_service()
-    history_dicts = [{"role": t.role, "content": t.content} for t in request.history]
+    history_dicts = [{"role": t.role, "content": t.content} for t in (request.history or [])]
 
     def event_stream():
         try:
+            llm_service = get_llm_service()
             for item in llm_service.stream_response(query=request.message, history=history_dicts):
                 yield f"data: {json.dumps(item)}\n\n"
         except Exception as e:
-            logger.error(f"Stream error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+            logger.exception("Stream generation error")
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e), 'detail': str(e), 'error_type': type(e).__name__})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
