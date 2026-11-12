@@ -146,6 +146,8 @@ class LLMService:
 
         return {
             "reply": reply,
+            "response": reply,
+            "answer": reply,
             "citations": [],
             "is_small_talk": small_talk,
         }
@@ -193,8 +195,10 @@ class LLMService:
                 )
                 if not getattr(completion, "choices", None):
                     continue
-                content = completion.choices[0].message.content or ""
-                return content.strip()
+                content = (completion.choices[0].message.content or "").strip()
+                if content:
+                    return content
+                logger.warning(f"Model '{model_name}' returned empty content. Trying fallback...")
             except Exception as e:
                 logger.warning(f"Model '{model_name}' failed: {e}. Trying fallback...")
                 last_error = e

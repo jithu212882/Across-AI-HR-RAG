@@ -1245,32 +1245,42 @@
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
+        if (value) {
+          buffer += decoder.decode(value, { stream: !done });
+        }
         const lines = buffer.split('\n');
-        buffer = lines.pop();
+        buffer = done ? '' : lines.pop();
 
         for (const line of lines) {
           const trimmed = line.trim();
           if (trimmed.startsWith('data: ')) {
             try {
               const eventData = JSON.parse(trimmed.slice(6));
+              if (eventData.type === 'error') {
+                throw new Error(eventData.error || eventData.detail || 'Stream error');
+              }
               if (eventData.type === 'token') {
-                accumulatedText += eventData.token;
-                assistantMsg.bubble.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedText));
-                scrollToBottom();
+                const tok = eventData.token || eventData.content || eventData.delta || '';
+                if (tok) {
+                  accumulatedText += tok;
+                  assistantMsg.bubble.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedText));
+                  scrollToBottom();
+                }
               }
             } catch (jsonErr) {
-              console.warn('SSE JSON parse error:', jsonErr);
+              if (jsonErr instanceof SyntaxError) {
+                console.warn('SSE JSON parse error:', jsonErr);
+              } else {
+                throw jsonErr;
+              }
             }
           }
         }
+        if (done) break;
       }
 
       if (!accumulatedText.trim()) {
-        accumulatedText = 'No response generated.';
-        assistantMsg.bubble.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedText));
+        throw new Error('Empty stream response');
       }
 
       conversationHistory.push({ role: 'user', content: query });
@@ -1289,7 +1299,7 @@
           })
         });
         const data = await res.json();
-        const reply = data.reply || 'No response generated.';
+        const reply = data.response || data.answer || data.reply || data.message || 'No response generated.';
 
         assistantMsg.bubble.innerHTML = DOMPurify.sanitize(marked.parse(reply));
 
