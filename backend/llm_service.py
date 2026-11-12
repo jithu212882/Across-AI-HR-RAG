@@ -142,6 +142,7 @@ class LLMService:
         if client is not None:
             reply = self._call_hf_router(client, query, history, context_str, small_talk)
         else:
+            logger.warning("LLM client is None (missing LLM_API_KEY); returning extractive fallback.")
             reply = self._fallback_response(query, retrieved_chunks, small_talk)
 
         return {
@@ -200,7 +201,10 @@ class LLMService:
                     return content
                 logger.warning(f"Model '{model_name}' returned empty content. Trying fallback...")
             except Exception as e:
-                logger.warning(f"Model '{model_name}' failed: {e}. Trying fallback...")
+                logger.error(
+                    f"LLM call failed on model='{model_name}' base_url='{config.LLM_BASE_URL}': {type(e).__name__}: {e}",
+                    exc_info=True,
+                )
                 last_error = e
 
         if last_error:
@@ -235,6 +239,7 @@ class LLMService:
         if client is not None:
             yield from self._stream_hf_router(client, query, history, context_str, small_talk)
         else:
+            logger.warning("LLM client is None (missing LLM_API_KEY); streaming extractive fallback.")
             fallback_text = self._fallback_response(query, retrieved_chunks, small_talk)
             words = fallback_text.split(" ")
             for i in range(0, len(words), 3):
@@ -279,7 +284,10 @@ class LLMService:
                 if yielded_any:
                     return
             except Exception as e:
-                logger.warning(f"Streaming failed on '{model_name}': {e}. Attempting next model...")
+                logger.error(
+                    f"Streaming LLM call failed on model='{model_name}' base_url='{config.LLM_BASE_URL}': {type(e).__name__}: {e}",
+                    exc_info=True,
+                )
 
         # If all streaming attempts failed, stream fallback response
         fallback_text = self._fallback_response(query, self.retriever.retrieve(query, top_k=5) if not small_talk else [], small_talk)

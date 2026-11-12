@@ -35,19 +35,36 @@ def _resolve_llm_provider(base_url: str, api_key: str) -> str:
     """Resolve LLM provider, defaulting to 'groq' for Groq URLs or gsk_ keys."""
     provider = _clean_env(os.getenv("LLM_PROVIDER"))
     if provider:
-        return provider
+        return provider.lower()
     if "groq.com" in base_url.lower() or api_key.startswith("gsk_"):
         return "groq"
     return "groq"
 
-raw_base_url = _clean_env(os.getenv("LLM_BASE_URL"), "https://api.groq.com/openai/v1")
-# Strip markdown links if present in .env
-if "[" in raw_base_url and "](" in raw_base_url:
-    raw_base_url = raw_base_url.split("](")[1].rstrip(")")
-LLM_BASE_URL = _clean_env(raw_base_url, "https://api.groq.com/openai/v1")
+def _normalize_base_url(raw_url: str, provider: str) -> str:
+    """Ensure Groq base URLs always include /openai/v1 and no trailing slash."""
+    url = _clean_env(raw_url)
+    if "[" in url and "](" in url:
+        url = url.split("](")[1].rstrip(")")
+    url = _clean_env(url).rstrip("/")
+    if not url:
+        return "https://api.groq.com/openai/v1" if provider == "groq" else ""
+    if provider == "groq" or "groq.com" in url.lower():
+        if url in ("https://api.groq.com", "http://api.groq.com", "https://api.groq.com/v1", "https://api.groq.com/openai"):
+            return "https://api.groq.com/openai/v1"
+    return url
 
-LLM_API_KEY = _clean_env(os.getenv("LLM_API_KEY"))
-LLM_PROVIDER = _resolve_llm_provider(LLM_BASE_URL, LLM_API_KEY)
+def _resolve_api_key() -> str:
+    """Resolve API key from LLM_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY."""
+    for env_name in ("LLM_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY"):
+        val = _clean_env(os.getenv(env_name))
+        if val:
+            return val
+    return ""
+
+LLM_API_KEY = _resolve_api_key()
+_raw_url_init = _clean_env(os.getenv("LLM_BASE_URL"), "https://api.groq.com/openai/v1")
+LLM_PROVIDER = _resolve_llm_provider(_raw_url_init, LLM_API_KEY)
+LLM_BASE_URL = _normalize_base_url(_raw_url_init, LLM_PROVIDER)
 LLM_MODEL = _clean_env(os.getenv("LLM_MODEL"), "llama-3.3-70b-versatile")
 
 # Fallback Models list
@@ -77,13 +94,10 @@ def reload_env():
     except Exception:
         pass
 
+    LLM_API_KEY = _resolve_api_key()
     raw_url = _clean_env(os.getenv("LLM_BASE_URL"), "https://api.groq.com/openai/v1")
-    if "[" in raw_url and "](" in raw_url:
-        raw_url = raw_url.split("](")[1].rstrip(")")
-    LLM_BASE_URL = _clean_env(raw_url, "https://api.groq.com/openai/v1")
-
-    LLM_API_KEY = _clean_env(os.getenv("LLM_API_KEY"))
-    LLM_PROVIDER = _resolve_llm_provider(LLM_BASE_URL, LLM_API_KEY)
+    LLM_PROVIDER = _resolve_llm_provider(raw_url, LLM_API_KEY)
+    LLM_BASE_URL = _normalize_base_url(raw_url, LLM_PROVIDER)
     LLM_MODEL = _clean_env(os.getenv("LLM_MODEL"), "llama-3.3-70b-versatile")
 
     raw_fb = os.getenv("LLM_FALLBACK_MODELS", "llama-3.1-8b-instant,mixtral-8x7b-32768").strip('"\'')
