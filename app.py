@@ -35,7 +35,7 @@ def _get_index_file():
     return BASE_DIR / "index.html"
 
 def _attach_routes(target_app):
-    """Attach fastapi_app routes and /ui to target_app."""
+    """Attach fastapi_app routes and /ui to the launched Gradio FastAPI app."""
     target_app.include_router(fastapi_app.router)
 
     @target_app.get("/ui", include_in_schema=False)
@@ -49,21 +49,12 @@ def _attach_routes(target_app):
         except Exception:
             pass
 
-# Attach routes to demo.app
-_attach_routes(demo.app)
-
-# Ensure runtime app created during demo.launch() also gets all routes
-_orig_create_app = gr.routes.App.create_app
-def _patched_create_app(*args, **kwargs):
-    runtime_app = _orig_create_app(*args, **kwargs)
-    _attach_routes(runtime_app)
-    return runtime_app
-gr.routes.App.create_app = _patched_create_app
-
-app = demo.app
-
 if __name__ == "__main__":
     demo.launch(
         server_name="0.0.0.0",
         server_port=int(os.environ.get("PORT", 7860)),
+        ssr_mode=False,
+        prevent_thread_lock=True,
     )
+    _attach_routes(demo.app)
+    demo.block_thread()
