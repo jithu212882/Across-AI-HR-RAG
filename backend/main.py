@@ -122,43 +122,49 @@ async def chat_stream_endpoint(request: ChatRequest):
 async def update_config(config: ConfigUpdateRequest):
     """Update API keys or models dynamically at runtime."""
     env_updates = {}
-    if config.llm_api_key is not None:
+    if config.llm_api_key is not None and config.llm_api_key.strip():
         env_updates["LLM_API_KEY"] = config.llm_api_key.strip()
     if config.llm_base_url is not None and config.llm_base_url.strip():
         env_updates["LLM_BASE_URL"] = config.llm_base_url.strip()
     if config.llm_model is not None and config.llm_model.strip():
         env_updates["LLM_MODEL"] = config.llm_model.strip()
 
-    # Read existing .env
-    existing_lines = []
-    if ENV_PATH.exists():
-        with open(ENV_PATH, "r", encoding="utf-8") as f:
-            existing_lines = f.readlines()
-
-    updated_keys = set()
-    new_lines = []
-    for line in existing_lines:
-        match = False
-        for k, v in env_updates.items():
-            if line.startswith(f"{k}="):
-                new_lines.append(f"{k}={v}\n")
-                updated_keys.add(k)
-                match = True
-                break
-        if not match:
-            new_lines.append(line)
-
+    # Always update in-memory environment variables first
     for k, v in env_updates.items():
-        if k not in updated_keys:
-            new_lines.append(f"{k}={v}\n")
+        os.environ[k] = v
 
-    with open(ENV_PATH, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
+    # Persist to .env if filesystem is writable; ignore read-only container errors
+    if env_updates:
+        try:
+            existing_lines = []
+            if ENV_PATH.exists():
+                with open(ENV_PATH, "r", encoding="utf-8") as f:
+                    existing_lines = f.readlines()
+
+            updated_keys = set()
+            new_lines = []
+            for line in existing_lines:
+                match = False
+                for k, v in env_updates.items():
+                    if line.startswith(f"{k}="):
+                        new_lines.append(f"{k}={v}\n")
+                        updated_keys.add(k)
+                        match = True
+                        break
+                if not match:
+                    new_lines.append(line)
+
+            for k, v in env_updates.items():
+                if k not in updated_keys:
+                    new_lines.append(f"{k}={v}\n")
+
+            with open(ENV_PATH, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+        except Exception as e:
+            logger.warning(f"Skipping .env file write (read-only or restricted filesystem): {e}")
 
     # Reload variables in memory
     reload_env()
-    for k, v in env_updates.items():
-        os.environ[k] = v
 
     llm_service = get_llm_service()
     new_provider = llm_service.get_active_provider()

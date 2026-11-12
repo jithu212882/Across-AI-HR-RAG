@@ -43,10 +43,23 @@ class HybridRetriever:
         self.alpha = alpha  # Weight for dense vs BM25
 
         logger.info(f"Initializing HybridRetriever with collection '{self.collection_name}' at {self.chroma_path}")
-        self.client = chromadb.PersistentClient(
-            path=self.chroma_path,
-            settings=Settings(anonymized_telemetry=False)
-        )
+        try:
+            self.client = chromadb.PersistentClient(
+                path=self.chroma_path,
+                settings=Settings(anonymized_telemetry=False)
+            )
+            # Verify collection access is writable/usable
+            self.client.list_collections()
+        except Exception as e:
+            logger.warning(f"Persistent ChromaDB at {self.chroma_path} unavailable ({e}); falling back to /tmp/mgi_chroma_db or EphemeralClient.")
+            try:
+                tmp_path = "/tmp/mgi_chroma_db"
+                self.client = chromadb.PersistentClient(
+                    path=tmp_path,
+                    settings=Settings(anonymized_telemetry=False)
+                )
+            except Exception:
+                self.client = chromadb.EphemeralClient(settings=Settings(anonymized_telemetry=False))
 
         logger.info(f"Loading embedding model '{self.embedding_model_name}'...")
         self.embedder = SentenceTransformer(self.embedding_model_name)

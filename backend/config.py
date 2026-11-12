@@ -23,7 +23,15 @@ BM25_K = int(os.getenv("BM25_K", "6"))
 HYBRID_ALPHA = float(os.getenv("HYBRID_ALPHA", "0.6"))
 
 # LLM Configurations (Groq / OpenAI-compatible Router)
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")
+def _resolve_llm_provider(base_url: str, api_key: str) -> str:
+    """Resolve LLM provider, defaulting to 'groq' for Groq URLs or gsk_ keys."""
+    provider = os.getenv("LLM_PROVIDER", "").strip().strip('"\'')
+    if provider:
+        return provider
+    if "groq.com" in base_url.lower() or api_key.startswith("gsk_"):
+        return "groq"
+    return "groq"
+
 raw_base_url = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
 # Strip markdown links if present in .env
 if "[" in raw_base_url and "](" in raw_base_url:
@@ -31,6 +39,7 @@ if "[" in raw_base_url and "](" in raw_base_url:
 LLM_BASE_URL = raw_base_url.strip('"\'')
 
 LLM_API_KEY = os.getenv("LLM_API_KEY", "").strip('"\'')
+LLM_PROVIDER = _resolve_llm_provider(LLM_BASE_URL, LLM_API_KEY)
 LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile").strip('"\'')
 
 # Fallback Models list
@@ -52,17 +61,21 @@ PORT = int(os.getenv("PORT", "8000"))
 DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
 
 def reload_env():
-    """Reload environment variables if .env was updated at runtime."""
+    """Reload environment variables if .env was updated at runtime without clobbering runtime secrets."""
     global LLM_PROVIDER, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, FALLBACK_MODELS, CHROMA_DB_PATH, COLLECTION_NAME
-    load_dotenv(dotenv_path=ENV_PATH, override=True)
-    LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")
-    
+    try:
+        if ENV_PATH.exists():
+            load_dotenv(dotenv_path=ENV_PATH, override=False)
+    except Exception:
+        pass
+
     raw_url = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
     if "[" in raw_url and "](" in raw_url:
         raw_url = raw_url.split("](")[1].rstrip(")")
     LLM_BASE_URL = raw_url.strip('"\'')
 
     LLM_API_KEY = os.getenv("LLM_API_KEY", "").strip('"\'')
+    LLM_PROVIDER = _resolve_llm_provider(LLM_BASE_URL, LLM_API_KEY)
     LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile").strip('"\'')
 
     raw_fb = os.getenv("LLM_FALLBACK_MODELS", "llama-3.1-8b-instant,mixtral-8x7b-32768").strip('"\'')

@@ -5,11 +5,8 @@ from typing import List, Dict, Any, Optional, Generator
 
 from openai import OpenAI
 
+import backend.config as config
 from backend.config import (
-    LLM_BASE_URL,
-    LLM_API_KEY,
-    LLM_MODEL,
-    FALLBACK_MODELS,
     TEMPERATURE,
     TOP_P,
     FREQUENCY_PENALTY,
@@ -96,21 +93,20 @@ class LLMService:
     def get_client(self) -> Optional[OpenAI]:
         """Create OpenAI client pointed at configured provider."""
         reload_env()
-        from backend.config import LLM_BASE_URL, LLM_API_KEY
-        if not LLM_API_KEY or not LLM_API_KEY.strip():
+        if not config.LLM_API_KEY or not config.LLM_API_KEY.strip():
             return None
         return OpenAI(
-            base_url=LLM_BASE_URL,
-            api_key=LLM_API_KEY,
+            base_url=config.LLM_BASE_URL,
+            api_key=config.LLM_API_KEY,
         )
 
     def get_active_provider(self) -> Dict[str, Any]:
         """Check status of configuration without leaking internal details."""
         reload_env()
-        from backend.config import LLM_API_KEY
-        configured = bool(LLM_API_KEY and LLM_API_KEY.strip())
+        configured = bool(config.LLM_API_KEY and config.LLM_API_KEY.strip())
         return {
             "configured": configured,
+            "provider": config.LLM_PROVIDER,
         }
 
     def generate_response(
@@ -175,7 +171,7 @@ class LLMService:
     ) -> str:
         """Call configured LLM with primary model and automatic fallback chain."""
         messages = self._build_messages(query, history, context, small_talk)
-        models_to_try = [LLM_MODEL] + [m for m in FALLBACK_MODELS if m != LLM_MODEL]
+        models_to_try = [config.LLM_MODEL] + [m for m in config.FALLBACK_MODELS if m != config.LLM_MODEL]
 
         last_error = None
         for model_name in models_to_try:
@@ -245,7 +241,7 @@ class LLMService:
     ) -> Generator[Dict[str, Any], None, None]:
         """Stream tokens with model fallback on connection failure."""
         messages = self._build_messages(query, history, context, small_talk)
-        models_to_try = [LLM_MODEL] + [m for m in FALLBACK_MODELS if m != LLM_MODEL]
+        models_to_try = [config.LLM_MODEL] + [m for m in config.FALLBACK_MODELS if m != config.LLM_MODEL]
 
         for model_name in models_to_try:
             try:

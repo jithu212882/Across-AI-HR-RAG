@@ -1079,9 +1079,9 @@
     if (window.ACROSS_AI_BACKEND_URL && window.ACROSS_AI_BACKEND_URL.trim()) {
       return window.ACROSS_AI_BACKEND_URL.trim().replace(/\/+$/, '');
     }
-    // If opened via local dev server on non-8000 port (e.g. Vite, LiveServer, Vercel CLI)
+    // If opened via local dev server on non-backend port (e.g. Vite, LiveServer, Vercel CLI)
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      if (window.location.port !== '8000') {
+      if (window.location.port !== '8000' && window.location.port !== '7860') {
         return 'http://127.0.0.1:8000';
       }
     }
